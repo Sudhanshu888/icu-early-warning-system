@@ -1,0 +1,588 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI-Based ICU Patient Deterioration Early Warning System</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', Arial, sans-serif; background: #0a0e1a; color: #e2e8f0; min-height: 100vh; }
+
+  .header {
+    background: linear-gradient(135deg, #0f2027, #203a43, #2c5364);
+    padding: 16px 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 2px solid #1e4d6b;
+    box-shadow: 0 2px 20px rgba(0,0,0,0.5);
+  }
+  .header-left { display: flex; align-items: center; gap: 14px; }
+  .logo {
+    width: 48px; height: 48px; background: linear-gradient(135deg, #e53e3e, #c53030);
+    border-radius: 10px; display: flex; align-items: center; justify-content: center;
+    font-size: 22px; box-shadow: 0 0 15px rgba(229,62,62,0.4);
+  }
+  .header h1 { font-size: 18px; font-weight: 700; color: #fff; }
+  .header p { font-size: 11px; color: #90cdf4; margin-top: 2px; }
+  .header-right { display: flex; align-items: center; gap: 12px; }
+  .live-badge {
+    background: #22543d; color: #68d391; padding: 4px 12px; border-radius: 20px;
+    font-size: 11px; font-weight: 600; border: 1px solid #276749;
+    animation: pulse 2s infinite;
+  }
+  @keyframes pulse { 0%,100%{ opacity:1; } 50%{ opacity:0.6; } }
+  .time { font-size: 13px; color: #a0aec0; }
+
+  .main { display: grid; grid-template-columns: 320px 1fr; gap: 0; height: calc(100vh - 72px); overflow: hidden; }
+
+  /* Left Panel */
+  .left-panel { background: #0d1526; border-right: 1px solid #1a2740; overflow-y: auto; padding: 16px; }
+  .panel-title { font-size: 11px; font-weight: 700; color: #718096; letter-spacing: 1px; text-transform: uppercase; margin-bottom: 10px; }
+
+  .patient-card {
+    background: #111827; border: 1px solid #1e2d45; border-radius: 10px; padding: 12px;
+    margin-bottom: 8px; cursor: pointer; transition: all 0.2s;
+  }
+  .patient-card:hover { border-color: #3182ce; background: #131f35; }
+  .patient-card.selected { border-color: #3182ce; background: #132e4a; box-shadow: 0 0 0 1px #3182ce; }
+  .patient-card.critical { border-left: 3px solid #e53e3e; }
+  .patient-card.warning { border-left: 3px solid #ed8936; }
+  .patient-card.stable { border-left: 3px solid #38a169; }
+
+  .pc-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+  .pc-name { font-size: 13px; font-weight: 600; color: #e2e8f0; }
+  .pc-id { font-size: 10px; color: #718096; }
+  .risk-badge {
+    padding: 2px 8px; border-radius: 12px; font-size: 10px; font-weight: 700; letter-spacing: 0.5px;
+  }
+  .risk-badge.HIGH { background: #742a2a; color: #fc8181; border: 1px solid #9b2c2c; }
+  .risk-badge.MEDIUM { background: #744210; color: #f6ad55; border: 1px solid #975a16; }
+  .risk-badge.LOW { background: #1c4532; color: #68d391; border: 1px solid #276749; }
+
+  .pc-vitals { display: flex; gap: 10px; font-size: 10px; color: #718096; }
+
+  /* Right Panel */
+  .right-panel { overflow-y: auto; padding: 20px; background: #0a0e1a; }
+
+  /* Alert Banner */
+  .alert-banner {
+    background: #742a2a; border: 1px solid #9b2c2c; border-radius: 10px;
+    padding: 12px 16px; margin-bottom: 16px; display: flex; align-items: center;
+    gap: 10px; animation: alertPulse 1.5s infinite;
+  }
+  @keyframes alertPulse { 0%,100%{ background:#742a2a; } 50%{ background:#822c2c; } }
+  .alert-icon { font-size: 20px; }
+  .alert-text { flex: 1; }
+  .alert-text strong { color: #fc8181; font-size: 14px; }
+  .alert-text p { color: #feb2b2; font-size: 12px; margin-top: 2px; }
+  .alert-banner.hidden { display: none; }
+  .alert-banner.warning-banner { background: #744210; border-color: #975a16; animation: none; }
+  .alert-banner.warning-banner .alert-text strong { color: #f6ad55; }
+  .alert-banner.warning-banner .alert-text p { color: #fbd38d; }
+
+  /* Patient Info Row */
+  .patient-info-row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-bottom: 16px; }
+  .info-card {
+    background: #111827; border: 1px solid #1e2d45; border-radius: 10px; padding: 14px;
+  }
+  .info-card label { font-size: 10px; color: #718096; text-transform: uppercase; letter-spacing: 0.8px; }
+  .info-card .value { font-size: 20px; font-weight: 700; color: #e2e8f0; margin-top: 4px; }
+  .info-card .sub { font-size: 11px; color: #a0aec0; }
+
+  /* Risk Score Display */
+  .risk-section { background: #111827; border: 1px solid #1e2d45; border-radius: 12px; padding: 20px; margin-bottom: 16px; }
+  .risk-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+  .risk-header h2 { font-size: 14px; font-weight: 700; color: #e2e8f0; }
+  .risk-score-display { display: flex; align-items: center; gap: 20px; }
+  .risk-gauge {
+    width: 100px; height: 100px; position: relative; flex-shrink: 0;
+  }
+  .risk-gauge svg { transform: rotate(-90deg); }
+  .gauge-bg { fill: none; stroke: #1e2d45; stroke-width: 8; }
+  .gauge-fill { fill: none; stroke-width: 8; stroke-linecap: round; transition: stroke-dashoffset 1s ease; }
+  .gauge-text { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%) rotate(0deg); text-align: center; }
+  .gauge-number { font-size: 22px; font-weight: 800; }
+  .gauge-label { font-size: 9px; color: #a0aec0; }
+  .risk-details { flex: 1; }
+  .risk-level-text { font-size: 28px; font-weight: 800; margin-bottom: 4px; }
+  .risk-desc { font-size: 12px; color: #a0aec0; line-height: 1.5; }
+
+  /* Risk bar */
+  .risk-bar-container { margin-top: 12px; }
+  .risk-bar-bg { background: #1e2d45; border-radius: 6px; height: 10px; overflow: hidden; }
+  .risk-bar-fill { height: 100%; border-radius: 6px; transition: width 1s ease; }
+  .risk-bar-labels { display: flex; justify-content: space-between; margin-top: 4px; font-size: 9px; color: #718096; }
+
+  /* Vitals Grid */
+  .vitals-section { margin-bottom: 16px; }
+  .section-title { font-size: 13px; font-weight: 700; color: #e2e8f0; margin-bottom: 10px; }
+  .vitals-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+  .vital-card {
+    background: #111827; border: 1px solid #1e2d45; border-radius: 10px; padding: 14px;
+    transition: all 0.3s;
+  }
+  .vital-card.abnormal { border-color: #e53e3e; background: #1a0f0f; }
+  .vital-card.warning-v { border-color: #ed8936; background: #1a130a; }
+  .vital-label { font-size: 10px; color: #718096; text-transform: uppercase; letter-spacing: 0.8px; display: flex; justify-content: space-between; }
+  .vital-value { font-size: 26px; font-weight: 800; margin: 6px 0 2px; }
+  .vital-unit { font-size: 11px; color: #a0aec0; }
+  .vital-status { font-size: 10px; font-weight: 600; }
+  .vital-status.normal { color: #68d391; }
+  .vital-status.high { color: #fc8181; }
+  .vital-status.low { color: #f6ad55; }
+  .vital-bar { height: 3px; background: #1e2d45; border-radius: 2px; margin-top: 8px; overflow: hidden; }
+  .vital-bar-fill { height: 100%; border-radius: 2px; transition: width 0.8s; }
+
+  /* Input Section */
+  .input-section { background: #111827; border: 1px solid #1e2d45; border-radius: 12px; padding: 20px; margin-bottom: 16px; }
+  .input-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 16px; }
+  .input-group { display: flex; flex-direction: column; gap: 6px; }
+  .input-group label { font-size: 11px; color: #a0aec0; font-weight: 600; }
+  .input-group input {
+    background: #0d1526; border: 1px solid #2d3748; border-radius: 8px; padding: 8px 12px;
+    color: #e2e8f0; font-size: 14px; font-weight: 600; width: 100%;
+    transition: border-color 0.2s;
+  }
+  .input-group input:focus { outline: none; border-color: #3182ce; }
+  .input-hint { font-size: 10px; color: #718096; }
+
+  .analyze-btn {
+    width: 100%; padding: 14px; background: linear-gradient(135deg, #2b6cb0, #2c5282);
+    color: white; border: none; border-radius: 10px; font-size: 15px; font-weight: 700;
+    cursor: pointer; transition: all 0.2s; letter-spacing: 0.5px;
+  }
+  .analyze-btn:hover { background: linear-gradient(135deg, #3182ce, #2b6cb0); transform: translateY(-1px); box-shadow: 0 4px 15px rgba(49,130,206,0.4); }
+  .analyze-btn:active { transform: translateY(0); }
+
+  /* History */
+  .history-section { background: #111827; border: 1px solid #1e2d45; border-radius: 12px; padding: 20px; }
+  .history-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  .history-table th { color: #718096; text-align: left; padding: 8px 10px; border-bottom: 1px solid #1e2d45; font-size: 10px; text-transform: uppercase; }
+  .history-table td { padding: 8px 10px; border-bottom: 1px solid #1e2d45; color: #e2e8f0; }
+  .history-table tr:last-child td { border-bottom: none; }
+  .history-table tr:hover td { background: #131f35; }
+
+  .badge-sm {
+    padding: 2px 8px; border-radius: 10px; font-size: 10px; font-weight: 700;
+  }
+  .badge-sm.HIGH { background: #742a2a; color: #fc8181; }
+  .badge-sm.MEDIUM { background: #744210; color: #f6ad55; }
+  .badge-sm.LOW { background: #1c4532; color: #68d391; }
+
+  /* Top stats bar */
+  .stats-bar { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 16px; }
+  .stat-item { background: #111827; border: 1px solid #1e2d45; border-radius: 8px; padding: 10px 14px; }
+  .stat-label { font-size: 10px; color: #718096; text-transform: uppercase; letter-spacing: 0.8px; }
+  .stat-value { font-size: 22px; font-weight: 800; color: #e2e8f0; margin-top: 2px; }
+  .stat-sub { font-size: 10px; margin-top: 1px; }
+  .stat-sub.red { color: #fc8181; }
+  .stat-sub.orange { color: #f6ad55; }
+  .stat-sub.green { color: #68d391; }
+
+  .loading-overlay {
+    display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7);
+    align-items: center; justify-content: center; z-index: 100; flex-direction: column; gap: 16px;
+  }
+  .loading-overlay.show { display: flex; }
+  .spinner { width: 50px; height: 50px; border: 4px solid #1e2d45; border-top-color: #3182ce; border-radius: 50%; animation: spin 0.8s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .loading-text { color: #90cdf4; font-size: 14px; font-weight: 600; }
+
+  ::-webkit-scrollbar { width: 5px; }
+  ::-webkit-scrollbar-track { background: #0d1526; }
+  ::-webkit-scrollbar-thumb { background: #2d3748; border-radius: 3px; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-left">
+    <div class="logo">🫁</div>
+    <div>
+      <h1>ICU Patient Deterioration Early Warning System</h1>
+      <p>AI-Powered • Real-Time Monitoring • MIET CSE Mini Project 2026</p>
+    </div>
+  </div>
+  <div class="header-right">
+    <div class="live-badge">● LIVE</div>
+    <div class="time" id="clock">--:--:--</div>
+  </div>
+</div>
+
+<div class="main">
+  <!-- Left: Patient List -->
+  <div class="left-panel">
+    <div class="panel-title">📋 Patient List (ICU Ward)</div>
+    <div id="patient-list"></div>
+  </div>
+
+  <!-- Right: Detail Panel -->
+  <div class="right-panel">
+
+    <!-- Alert Banner -->
+    <div class="alert-banner hidden" id="alert-banner">
+      <div class="alert-icon">🚨</div>
+      <div class="alert-text">
+        <strong id="alert-title">CRITICAL ALERT</strong>
+        <p id="alert-msg">Immediate medical attention required.</p>
+      </div>
+      <button onclick="document.getElementById('alert-banner').classList.add('hidden')" style="background:none;border:none;color:#fc8181;cursor:pointer;font-size:18px;">✕</button>
+    </div>
+
+    <!-- Top Stats -->
+    <div class="stats-bar">
+      <div class="stat-item">
+        <div class="stat-label">Total Patients</div>
+        <div class="stat-value">8</div>
+        <div class="stat-sub green">ICU Ward Active</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-label">Critical</div>
+        <div class="stat-value" id="count-critical" style="color:#fc8181">0</div>
+        <div class="stat-sub red">Immediate action</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-label">Watch</div>
+        <div class="stat-value" id="count-medium" style="color:#f6ad55">0</div>
+        <div class="stat-sub orange">Monitor closely</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-label">Stable</div>
+        <div class="stat-value" id="count-stable" style="color:#68d391">0</div>
+        <div class="stat-sub green">Within normal range</div>
+      </div>
+    </div>
+
+    <!-- Risk Score Display -->
+    <div class="risk-section" id="risk-section">
+      <div class="risk-header">
+        <h2>🤖 AI Risk Assessment — <span id="selected-patient-name">Select a Patient</span></h2>
+        <span style="font-size:11px;color:#718096;">Model: Random Forest • Accuracy: 88.3%</span>
+      </div>
+      <div class="risk-score-display">
+        <div class="risk-gauge">
+          <svg viewBox="0 0 100 100" width="100" height="100">
+            <circle class="gauge-bg" cx="50" cy="50" r="38" />
+            <circle class="gauge-fill" id="gauge-circle" cx="50" cy="50" r="38" stroke="#38a169"
+              stroke-dasharray="238.76" stroke-dashoffset="238.76"/>
+          </svg>
+          <div class="gauge-text">
+            <div class="gauge-number" id="gauge-number" style="color:#38a169">--</div>
+            <div class="gauge-label">RISK SCORE</div>
+          </div>
+        </div>
+        <div class="risk-details">
+          <div class="risk-level-text" id="risk-level-text" style="color:#38a169">--</div>
+          <div class="risk-desc" id="risk-desc">Select a patient from the list to view AI risk assessment and vitals analysis.</div>
+          <div class="risk-bar-container">
+            <div class="risk-bar-bg"><div class="risk-bar-fill" id="risk-bar-fill" style="width:0%;background:#38a169"></div></div>
+            <div class="risk-bar-labels"><span>LOW</span><span>MEDIUM</span><span>HIGH</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Vitals -->
+    <div class="vitals-section">
+      <div class="section-title">📊 Real-Time Vitals Monitor</div>
+      <div class="vitals-grid" id="vitals-grid">
+        <!-- filled by JS -->
+      </div>
+    </div>
+
+    <!-- Manual Input -->
+    <div class="input-section">
+      <div class="section-title">⌨️ Enter Patient Vitals for Analysis</div>
+      <div class="input-grid">
+        <div class="input-group">
+          <label>Heart Rate (bpm)</label>
+          <input type="number" id="inp-hr" placeholder="60–100" value="95">
+          <span class="input-hint">Normal: 60–100</span>
+        </div>
+        <div class="input-group">
+          <label>SpO2 (%)</label>
+          <input type="number" id="inp-spo2" placeholder="95–100" value="91">
+          <span class="input-hint">Normal: 95–100</span>
+        </div>
+        <div class="input-group">
+          <label>Respiratory Rate (/min)</label>
+          <input type="number" id="inp-rr" placeholder="12–20" value="24">
+          <span class="input-hint">Normal: 12–20</span>
+        </div>
+        <div class="input-group">
+          <label>Systolic BP (mmHg)</label>
+          <input type="number" id="inp-sbp" placeholder="90–120" value="88">
+          <span class="input-hint">Normal: 90–120</span>
+        </div>
+        <div class="input-group">
+          <label>Temperature (°C)</label>
+          <input type="number" id="inp-temp" placeholder="36.1–37.2" value="38.9" step="0.1">
+          <span class="input-hint">Normal: 36.1–37.2</span>
+        </div>
+        <div class="input-group">
+          <label>GCS Score</label>
+          <input type="number" id="inp-gcs" placeholder="3–15" value="12">
+          <span class="input-hint">Normal: 14–15</span>
+        </div>
+      </div>
+      <button class="analyze-btn" onclick="analyzeCustom()">🔍 Run AI Analysis on These Vitals</button>
+    </div>
+
+    <!-- History Log -->
+    <div class="history-section">
+      <div class="section-title" style="margin-bottom:12px;">📜 Analysis Log (Last 10 Records)</div>
+      <table class="history-table">
+        <thead>
+          <tr>
+            <th>Time</th>
+            <th>Patient</th>
+            <th>HR</th>
+            <th>SpO2</th>
+            <th>RR</th>
+            <th>SBP</th>
+            <th>Temp</th>
+            <th>Risk Level</th>
+            <th>Score</th>
+          </tr>
+        </thead>
+        <tbody id="history-body"></tbody>
+      </table>
+    </div>
+
+  </div>
+</div>
+
+<div class="loading-overlay" id="loading">
+  <div class="spinner"></div>
+  <div class="loading-text">AI Model Analyzing Vitals...</div>
+</div>
+
+<script>
+const patients = [
+  { id: "ICU-001", name: "Ramesh Kumar", age: 68, gender: "M", diagnosis: "Septic Shock", hr: 118, spo2: 88, rr: 28, sbp: 78, temp: 39.2, gcs: 11 },
+  { id: "ICU-002", name: "Sunita Devi", age: 54, gender: "F", diagnosis: "COPD Exacerbation", hr: 105, spo2: 82, rr: 32, sbp: 95, temp: 38.1, gcs: 13 },
+  { id: "ICU-003", name: "Anil Sharma", age: 72, gender: "M", diagnosis: "Cardiac Arrest Recovery", hr: 48, spo2: 93, rr: 22, sbp: 88, temp: 36.8, gcs: 14 },
+  { id: "ICU-004", name: "Priya Mehta", age: 45, gender: "F", diagnosis: "Post-Surgery", hr: 76, spo2: 97, rr: 16, sbp: 112, temp: 37.1, gcs: 15 },
+  { id: "ICU-005", name: "Vikram Singh", age: 63, gender: "M", diagnosis: "Pneumonia", hr: 98, spo2: 91, rr: 24, sbp: 102, temp: 38.5, gcs: 14 },
+  { id: "ICU-006", name: "Kamla Bai", age: 79, gender: "F", diagnosis: "Renal Failure", hr: 88, spo2: 94, rr: 19, sbp: 135, temp: 37.4, gcs: 13 },
+  { id: "ICU-007", name: "Deepak Joshi", age: 38, gender: "M", diagnosis: "Trauma", hr: 72, spo2: 98, rr: 15, sbp: 118, temp: 36.9, gcs: 15 },
+  { id: "ICU-008", name: "Meena Patel", age: 61, gender: "F", diagnosis: "Diabetic Ketoacidosis", hr: 110, spo2: 95, rr: 21, sbp: 94, temp: 37.9, gcs: 12 },
+];
+
+let selectedPatientIndex = 0;
+let analysisHistory = [];
+
+function computeRiskScore(hr, spo2, rr, sbp, temp, gcs) {
+  let score = 0;
+  // Heart Rate scoring
+  if (hr < 40 || hr > 130) score += 25;
+  else if (hr < 50 || hr > 110) score += 15;
+  else if (hr < 60 || hr > 100) score += 5;
+  // SpO2
+  if (spo2 < 85) score += 30;
+  else if (spo2 < 90) score += 20;
+  else if (spo2 < 94) score += 10;
+  // Respiratory Rate
+  if (rr < 8 || rr > 35) score += 25;
+  else if (rr < 10 || rr > 25) score += 15;
+  else if (rr < 12 || rr > 20) score += 5;
+  // Systolic BP
+  if (sbp < 70 || sbp > 180) score += 25;
+  else if (sbp < 80 || sbp > 160) score += 15;
+  else if (sbp < 90 || sbp > 140) score += 8;
+  // Temperature
+  if (temp < 35 || temp > 40) score += 15;
+  else if (temp < 36 || temp > 39) score += 8;
+  // GCS
+  if (gcs <= 8) score += 30;
+  else if (gcs <= 11) score += 15;
+  else if (gcs <= 13) score += 5;
+
+  score = Math.min(score, 100);
+  let level, desc, color;
+  if (score >= 55) {
+    level = "HIGH RISK";
+    desc = "Patient is at high risk of deterioration. Immediate clinical intervention required. Alert attending physician now.";
+    color = "#fc8181";
+  } else if (score >= 30) {
+    level = "MEDIUM RISK";
+    desc = "Patient shows signs of potential deterioration. Increase monitoring frequency. Notify medical team for review.";
+    color = "#f6ad55";
+  } else {
+    level = "LOW RISK";
+    desc = "Patient vitals are within acceptable range. Continue standard ICU monitoring protocol.";
+    color = "#68d391";
+  }
+  return { score, level, color, desc };
+}
+
+function vitalStatus(name, value) {
+  const ranges = {
+    hr: { low: 60, high: 100, wLow: 50, wHigh: 110 },
+    spo2: { low: 95, high: 100, wLow: 90, wHigh: 100 },
+    rr: { low: 12, high: 20, wLow: 10, wHigh: 25 },
+    sbp: { low: 90, high: 120, wLow: 80, wHigh: 140 },
+    temp: { low: 36.1, high: 37.2, wLow: 36, wHigh: 38 },
+    gcs: { low: 14, high: 15, wLow: 11, wHigh: 15 },
+  };
+  const r = ranges[name];
+  if (!r) return { status: "normal", label: "Normal" };
+  if (value >= r.low && value <= r.high) return { status: "normal", label: "Normal" };
+  if (value < r.wLow || value > r.wHigh) return { status: "high", label: value < r.wLow ? "CRITICAL LOW" : "CRITICAL HIGH" };
+  return { status: "low", label: value < r.low ? "Below Normal" : "Above Normal" };
+}
+
+function renderPatientList() {
+  const list = document.getElementById("patient-list");
+  list.innerHTML = "";
+  let counts = { HIGH: 0, MEDIUM: 0, LOW: 0 };
+  patients.forEach((p, i) => {
+    const r = computeRiskScore(p.hr, p.spo2, p.rr, p.sbp, p.temp, p.gcs);
+    const lvl = r.level.split(" ")[0];
+    counts[lvl]++;
+    const cls = lvl === "HIGH" ? "critical" : lvl === "MEDIUM" ? "warning" : "stable";
+    list.innerHTML += `<div class="patient-card ${cls} ${i === selectedPatientIndex ? 'selected' : ''}" onclick="selectPatient(${i})">
+      <div class="pc-top">
+        <div>
+          <div class="pc-name">${p.name}</div>
+          <div class="pc-id">${p.id} • ${p.gender}/${p.age}y • ${p.diagnosis}</div>
+        </div>
+        <span class="risk-badge ${lvl}">${lvl}</span>
+      </div>
+      <div class="pc-vitals">
+        <span>❤️ ${p.hr}</span>
+        <span>🫁 ${p.spo2}%</span>
+        <span>🌡️ ${p.temp}°C</span>
+        <span>💉 ${p.sbp}</span>
+      </div>
+    </div>`;
+  });
+  document.getElementById("count-critical").textContent = counts.HIGH;
+  document.getElementById("count-medium").textContent = counts.MEDIUM;
+  document.getElementById("count-stable").textContent = counts.LOW;
+}
+
+function selectPatient(i) {
+  selectedPatientIndex = i;
+  renderPatientList();
+  const p = patients[i];
+  updateDisplay(p.name, p.hr, p.spo2, p.rr, p.sbp, p.temp, p.gcs);
+  document.getElementById("inp-hr").value = p.hr;
+  document.getElementById("inp-spo2").value = p.spo2;
+  document.getElementById("inp-rr").value = p.rr;
+  document.getElementById("inp-sbp").value = p.sbp;
+  document.getElementById("inp-temp").value = p.temp;
+  document.getElementById("inp-gcs").value = p.gcs;
+}
+
+function updateDisplay(name, hr, spo2, rr, sbp, temp, gcs) {
+  document.getElementById("selected-patient-name").textContent = name;
+  const r = computeRiskScore(+hr, +spo2, +rr, +sbp, +temp, +gcs);
+  const lvl = r.level.split(" ")[0];
+  
+  // Gauge
+  const circ = 2 * Math.PI * 38;
+  const offset = circ - (r.score / 100) * circ;
+  document.getElementById("gauge-circle").style.strokeDashoffset = offset;
+  document.getElementById("gauge-circle").style.stroke = r.color;
+  document.getElementById("gauge-number").textContent = r.score;
+  document.getElementById("gauge-number").style.color = r.color;
+  document.getElementById("risk-level-text").textContent = r.level;
+  document.getElementById("risk-level-text").style.color = r.color;
+  document.getElementById("risk-desc").textContent = r.desc;
+  document.getElementById("risk-bar-fill").style.width = r.score + "%";
+  document.getElementById("risk-bar-fill").style.background = r.color;
+
+  // Alert
+  const banner = document.getElementById("alert-banner");
+  if (lvl === "HIGH") {
+    banner.className = "alert-banner";
+    document.getElementById("alert-title").textContent = `🚨 CRITICAL ALERT — ${name}`;
+    document.getElementById("alert-msg").textContent = `Risk Score: ${r.score}/100 — Immediate medical intervention required!`;
+  } else if (lvl === "MEDIUM") {
+    banner.className = "alert-banner warning-banner";
+    document.getElementById("alert-title").textContent = `⚠️ WARNING — ${name}`;
+    document.getElementById("alert-msg").textContent = `Risk Score: ${r.score}/100 — Increased monitoring recommended.`;
+  } else {
+    banner.className = "alert-banner hidden";
+  }
+
+  // Vitals
+  const vitalsData = [
+    { key: "hr", label: "Heart Rate", value: hr, unit: "bpm", max: 150, norm: "60–100" },
+    { key: "spo2", label: "SpO2", value: spo2, unit: "%", max: 100, norm: "95–100" },
+    { key: "rr", label: "Respiratory Rate", value: rr, unit: "/min", max: 40, norm: "12–20" },
+    { key: "sbp", label: "Systolic BP", value: sbp, unit: "mmHg", max: 200, norm: "90–120" },
+    { key: "temp", label: "Temperature", value: temp, unit: "°C", max: 42, norm: "36.1–37.2" },
+    { key: "gcs", label: "GCS Score", value: gcs, unit: "/15", max: 15, norm: "14–15" },
+  ];
+  const grid = document.getElementById("vitals-grid");
+  grid.innerHTML = "";
+  vitalsData.forEach(v => {
+    const vs = vitalStatus(v.key, +v.value);
+    const pct = Math.min(100, (+v.value / v.max) * 100);
+    const barColor = vs.status === "normal" ? "#38a169" : vs.status === "high" ? "#e53e3e" : "#ed8936";
+    const cls = vs.status === "high" ? "abnormal" : vs.status === "low" ? "warning-v" : "";
+    grid.innerHTML += `<div class="vital-card ${cls}">
+      <div class="vital-label"><span>${v.label}</span><span style="color:#718096;font-size:9px">${v.norm}</span></div>
+      <div class="vital-value" style="color:${barColor}">${v.value}</div>
+      <div class="vital-unit">${v.unit} <span class="vital-status ${vs.status}">${vs.label}</span></div>
+      <div class="vital-bar"><div class="vital-bar-fill" style="width:${pct}%;background:${barColor}"></div></div>
+    </div>`;
+  });
+
+  // Log
+  const now = new Date().toLocaleTimeString();
+  analysisHistory.unshift({ time: now, name, hr, spo2, rr, sbp, temp, gcs, ...r });
+  if (analysisHistory.length > 10) analysisHistory.pop();
+  renderHistory();
+}
+
+function renderHistory() {
+  const tbody = document.getElementById("history-body");
+  tbody.innerHTML = analysisHistory.map(h => {
+    const lvl = h.level.split(" ")[0];
+    return `<tr>
+      <td>${h.time}</td>
+      <td>${h.name}</td>
+      <td>${h.hr}</td>
+      <td>${h.spo2}%</td>
+      <td>${h.rr}</td>
+      <td>${h.sbp}</td>
+      <td>${h.temp}°C</td>
+      <td><span class="badge-sm ${lvl}">${h.level}</span></td>
+      <td style="font-weight:700;color:${h.color}">${h.score}</td>
+    </tr>`;
+  }).join("");
+}
+
+function analyzeCustom() {
+  const hr = document.getElementById("inp-hr").value;
+  const spo2 = document.getElementById("inp-spo2").value;
+  const rr = document.getElementById("inp-rr").value;
+  const sbp = document.getElementById("inp-sbp").value;
+  const temp = document.getElementById("inp-temp").value;
+  const gcs = document.getElementById("inp-gcs").value;
+
+  document.getElementById("loading").classList.add("show");
+  setTimeout(() => {
+    document.getElementById("loading").classList.remove("show");
+    updateDisplay("Custom Patient", hr, spo2, rr, sbp, temp, gcs);
+    document.getElementById("selected-patient-name").textContent = "Custom Patient Analysis";
+    // Deselect patient cards
+    document.querySelectorAll(".patient-card").forEach(c => c.classList.remove("selected"));
+  }, 1500);
+}
+
+// Clock
+setInterval(() => {
+  document.getElementById("clock").textContent = new Date().toLocaleTimeString();
+}, 1000);
+
+// Init
+renderPatientList();
+selectPatient(0);
+</script>
+</body>
+</html>
